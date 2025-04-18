@@ -7,7 +7,6 @@ import os
 
 app = FastAPI()
 
-# Allow CORS for local/Netlify testing
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,36 +15,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Payload model
 class EmailRequest(BaseModel):
     recipient_email: str
     recipient_name: str
     subject: str
     candidates: list
 
-# ✅ Fix the template path to look inside /templates
+# Setup Jinja2 environment
 env = Environment(
-    loader=FileSystemLoader("templates"),
+    loader=FileSystemLoader("templates"),  # ✅ use correct folder
     autoescape=select_autoescape()
 )
 
-# ✅ Load the correct file name
+# Load email template
 template = env.get_template("email_template.html")
 
 @app.post("/send_candidate_list_email/")
 async def send_email(payload: EmailRequest):
-    # Render the email body using Jinja
+    print("✅ Received payload:", payload.dict())
+
+    # Render HTML content from template
     html_content = template.render(
         recipient_name=payload.recipient_name,
         subject=payload.subject,
         candidates=payload.candidates
     )
 
-    # ✅ Use hardcoded sender details (working ones)
+    # ✅ Hardcoded From Info
     from_email = "pst@emails.testbook.com"
     from_name = "PST Team"
 
-    # Prepare the payload
+    # Build payload for Netcore
     data = {
         "personalizations": [
             {
@@ -70,28 +70,28 @@ async def send_email(payload: EmailRequest):
         ]
     }
 
-    # Read API creds from Render environment
+    # ✅ DEBUG: Print env vars
     api_key = os.getenv("EMAIL_API_KEY")
     api_url = os.getenv("EMAIL_API_URL")
+
+    print("🔑 Debug: Loaded API Key =", api_key if api_key else "❌ NOT FOUND")
+    print("🔗 Debug: Loaded API URL =", api_url if api_url else "❌ NOT FOUND")
 
     headers = {
         "Content-Type": "application/json",
         "X-Api-Key": api_key
     }
 
-    # Send request via Netcore
     session = requests.Session()
     req = requests.Request("POST", api_url, headers=headers, json=data)
     prepped = session.prepare_request(req)
 
-    # Logging for debugging
-    print("✅ Received payload:", payload.dict())
     print("📬 From Email:", from_email)
     print("📬 From Name:", from_name)
     print("📦 Final Netcore Payload:", data)
     print("🚀 Prepared Headers Sent:", prepped.headers)
 
-    # Fire the request
+    # Send the request
     response = session.send(prepped)
 
     print("📨 Netcore Status:", response.status_code)
