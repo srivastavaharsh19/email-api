@@ -9,10 +9,11 @@ import os
 
 app = FastAPI()
 
-# Allow CORS for all domains (you can restrict this later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://zp1v56uxy8rdx5ypatb0ockcb9tr6a-oci3-upn8vii4--5173--fb22cd3d.local-credentialless.webcontainer-api.io"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
