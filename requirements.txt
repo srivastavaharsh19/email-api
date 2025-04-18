@@ -1,4 +1,10 @@
 fastapi
 uvicorn
-pydantic
 requests
+python-multipart
+jinja2
+aiofiles
+python-dotenv
+email-validator
+httpx
+fastapi[all]
