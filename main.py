@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from typing import List, Optional
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from jinja2 import Environment, FileSystemLoader
 import requests
@@ -8,30 +9,31 @@ import os
 
 app = FastAPI()
 
-# Allow CORS for local or frontend app
+# Allow CORS for all domains (you can restrict this later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change to specific domain later
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Jinja2 environment
+# Jinja2 template setup
 env = Environment(loader=FileSystemLoader("templates"))
 
-# Pydantic models
+# Candidate model
 class Candidate(BaseModel):
     Name: str
     College: str
     Degree: str
-    Skills: str
+    Skills: str | List[str]  # Support both string and array
     Coding_Hours: str
     Projects: str
     LinkedIn: Optional[str] = None
     Portfolio: Optional[str] = None
     Email: Optional[str] = None
 
+# Email payload model
 class EmailRequest(BaseModel):
     recipient_email: str
     recipient_name: str
@@ -39,49 +41,42 @@ class EmailRequest(BaseModel):
     candidates: List[Candidate]
 
 @app.post("/send_candidate_list_email/")
-async def send_email(request: Request):
-    body = await request.body()
-    print("📦 RAW BODY RECEIVED:")
-    print(body.decode("utf-8"))
+async def send_email(payload: EmailRequest):
+    print("✅ Received payload:")
+    print(payload.dict())
 
-    return {"status": "received"}
+    # Fix: Convert skills list to comma-separated string if needed
+    for candidate in payload.candidates:
+        if isinstance(candidate.Skills, list):
+            candidate.Skills = ", ".join(candidate.Skills)
 
-    # Render the HTML content
+    # Load and render email template
     template = env.get_template("email_template.html")
     html_content = template.render(
         recipient_name=payload.recipient_name,
         candidates=payload.candidates
     )
 
-    # Read environment variables
+    # Load env variables
     email_api_url = os.environ.get("EMAIL_API_URL")
     email_api_key = os.environ.get("EMAIL_API_KEY")
     from_email = os.environ.get("FROM_EMAIL")
     from_name = os.environ.get("FROM_NAME")
 
-    # Construct Netcore request
+    # Construct Netcore payload
     netcore_payload = {
         "from": {
             "email": from_email,
             "name": from_name
         },
-        "personalizations": [
+        "to": [
             {
-                "to": [
-                    {
-                        "email": payload.recipient_email,
-                        "name": payload.recipient_name
-                    }
-                ],
-                "subject": payload.subject
+                "email": payload.recipient_email,
+                "name": payload.recipient_name
             }
         ],
-        "content": [
-            {
-                "type": "html",
-                "value": html_content
-            }
-        ]
+        "subject": payload.subject,
+        "htmlContent": html_content
     }
 
     headers = {
@@ -89,13 +84,13 @@ async def send_email(request: Request):
         "api_key": email_api_key
     }
 
-    response = requests.post(email_api_url, json=netcore_payload, headers=headers)
+    # Send to Netcore
+    response = requests.post(email_api_url, headers=headers, json=netcore_payload)
 
-    if response.status_code in [200, 202]:
-        return {"status": "Email sent"}
+    print("📨 Netcore API Status:", response.status_code)
+    print("📨 Netcore Response:", response.text)
+
+    if response.status_code == 200:
+        return {"status": "Email sent ✅"}
     else:
-        return {
-            "status": "Failed to send email",
-            "response_code": response.status_code,
-            "details": response.text
-        }
+        return {"status": "❌ Failed to send", "details": response.text}
