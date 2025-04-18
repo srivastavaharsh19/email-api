@@ -40,6 +40,9 @@ class EmailRequest(BaseModel):
 
 @app.post("/send_candidate_list_email/")
 async def send_email(payload: EmailRequest):
+    print("✅ Received payload:")
+    print(payload.dict())
+
     # Render the HTML content
     template = env.get_template("email_template.html")
     html_content = template.render(
