@@ -8,11 +8,8 @@ import os
 
 app = FastAPI()
 
-# Allow Netlify frontend
-origins = [
-    "https://chic-klepon-77ad14.netlify.app"
-]
-
+# CORS
+origins = ["https://chic-klepon-77ad14.netlify.app"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -21,10 +18,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Jinja2 email template setup
+# Template setup
 env = Environment(loader=FileSystemLoader("templates"))
 
-# Candidate data model
+# Models
 class Candidate(BaseModel):
     Name: str
     College: str
@@ -32,54 +29,44 @@ class Candidate(BaseModel):
     Skills: str | List[str]
     Coding_Hours: str
     Projects: str
-    LinkedIn: Optional[str] = None
-    Portfolio: Optional[str] = None
-    Email: Optional[str] = None
+    LinkedIn: Optional[str] = ""
+    Portfolio: Optional[str] = ""
+    Email: Optional[str] = ""
 
-# Email request payload
 class EmailRequest(BaseModel):
     recipient_email: str
     recipient_name: str
     subject: str
     candidates: List[Candidate]
 
+# Email endpoint
 @app.post("/send_candidate_list_email/")
 async def send_email(payload: EmailRequest):
     print("✅ Received payload:")
     print(payload.dict())
 
-    # Convert Skills list to string
+    # Convert Skills from list to comma-separated string
     for c in payload.candidates:
         if isinstance(c.Skills, list):
             c.Skills = ", ".join(c.Skills)
 
-    # Load and render HTML content
+    # Render template
     template = env.get_template("email_template.html")
     html_content = template.render(
         recipient_name=payload.recipient_name,
         candidates=payload.candidates
     )
 
-    # Load environment variables
-    from_email = os.getenv("FROM_EMAIL", "").strip().replace('"', '').replace("'", "")
-    from_name = os.getenv("FROM_NAME", "").strip()
-    email_api_url = os.getenv("EMAIL_API_URL")
-    email_api_key = os.getenv("EMAIL_API_KEY")
+    # Hardcoded sender
+    from_email = str("connect@emails.testbook.com").strip().replace('"', '').replace("'", "")
+    from_name = str("Polaris Campus").strip().replace('"', '').replace("'", "")
 
-    print("📬 From Email:", repr(from_email))
-    print("📬 From Name:", from_name)
-
-    # Construct Netcore payload
+    # Netcore payload
     netcore_payload = {
         "personalizations": [
             {
-                "to": [
-                    {
-                        "email": payload.recipient_email,
-                        "name": payload.recipient_name
-                    }
-                ],
-                "subject": payload.subject
+                "to": [{"email": payload.recipient_email, "name": payload.recipient_name}],
+                "subject": payload.subject,
             }
         ],
         "from": {
@@ -94,22 +81,25 @@ async def send_email(payload: EmailRequest):
         ]
     }
 
+    print("📬 From Email:", from_email)
+    print("📬 From Name:", from_name)
     print("📦 Final Netcore Payload:")
     print(netcore_payload)
 
+    # Headers
     headers = {
         "Content-Type": "application/json",
-        "api_key": email_api_key
+        "api_key": os.getenv("EMAIL_API_KEY")
     }
 
-    # Send email via Netcore
+    email_api_url = os.getenv("EMAIL_API_URL")
     response = requests.post(email_api_url, headers=headers, json=netcore_payload)
 
     print("📨 Netcore Status:", response.status_code)
     print("📨 Netcore Response:", response.text)
 
     if response.status_code == 200:
-        return {"status": "✅ Email sent successfully"}
+        return {"status": "✅ Email sent successfully!"}
     else:
         return {
             "status": "❌ Failed to send",
