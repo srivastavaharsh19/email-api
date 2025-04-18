@@ -1,37 +1,41 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from typing import List, Optional
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from jinja2 import Environment, FileSystemLoader
 import requests
+import os
 
 app = FastAPI()
 
-# CORS setup for Netlify frontend
+# CORS
+origins = [
+    "https://chic-klepon-77ad14.netlify.app"
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://chic-klepon-77ad14.netlify.app"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load Jinja2 template
+# Jinja2 template setup
 env = Environment(loader=FileSystemLoader("templates"))
 
-# Candidate data model
+# Pydantic Models
 class Candidate(BaseModel):
     Name: str
     College: str
     Degree: str
-    Skills: List[str] | str
+    Skills: List[str]
     Coding_Hours: str
     Projects: str
     LinkedIn: Optional[str] = ""
     Portfolio: Optional[str] = ""
     Email: Optional[str] = ""
 
-# Email input model
 class EmailRequest(BaseModel):
     recipient_email: str
     recipient_name: str
@@ -43,68 +47,70 @@ async def send_email(payload: EmailRequest):
     print("✅ Received payload:")
     print(payload.dict())
 
-    # Format candidate skills list
-    for c in payload.candidates:
-        if isinstance(c.Skills, list):
-            c.Skills = ", ".join(c.Skills)
+    try:
+        template = env.get_template("email_template.html")
+        html_content = template.render(
+            recipient_name=payload.recipient_name,
+            subject=payload.subject,
+            candidates=payload.candidates
+        )
 
-    # Render HTML email
-    template = env.get_template("email_template.html")
-    html_content = template.render(
-        recipient_name=payload.recipient_name,
-        candidates=payload.candidates
-    )
+        # HARDCODED FROM EMAIL AND NAME
+        from_email = "pst@emails.testbook.com"
+        from_name = "PST Team"
 
-    # 🔐 HARDCODED values (100% valid format)
-    from_email = "pst@emails.testbook.com"  # ✅ working sender
-    from_name = "PST Team"  # ✅ working name
+        # Compose final payload
+        final_payload = {
+            "personalizations": [
+                {
+                    "to": [
+                        {
+                            "email": payload.recipient_email,
+                            "name": payload.recipient_name
+                        }
+                    ],
+                    "subject": payload.subject
+                }
+            ],
+            "from": {
+                "email": from_email.strip(),
+                "name": from_name.strip()
+            },
+            "content": [
+                {
+                    "type": "html",
+                    "value": html_content
+                }
+            ]
+        }
 
-    # 🚀 Final Netcore API payload
-    netcore_payload = {
-        "personalizations": [
-            {
-                "to": [
-                    {
-                        "email": payload.recipient_email,
-                        "name": payload.recipient_name
-                    }
-                ],
-                "subject": payload.subject
-            }
-        ],
-        "from": {
-            "email": from_email.strip(),  # 🔍 ensure no spaces
-            "name": from_name.strip()
-        },
-        "content": [
-            {
-                "type": "html",  # ✅ NOT text/html, just html
-                "value": html_content
-            }
-        ]
-    }
+        print("📬 From Email:", from_email)
+        print("📬 From Name:", from_name)
+        print("📦 Final Netcore Payload:")
+        print(final_payload)
 
-    print("📦 Final Netcore Payload:")
-    print(netcore_payload)
+        headers = {
+            "Content-Type": "application/json",
+            "X-Api-Key": os.environ.get("EMAIL_API_KEY")
+        }
 
-    headers = {
-        "Content-Type": "application/json",
-        "api_key": "12f88c25be606f95bf4cfee3d3f58746"  # ✅ still working key
-    }
+        response = requests.post(
+            os.environ.get("EMAIL_API_URL"),
+            headers=headers,
+            json=final_payload
+        )
 
-    response = requests.post(
-        "https://emailapi.netcorecloud.net/v5.1/mail/send",
-        headers=headers,
-        json=netcore_payload
-    )
+        print("📨 Netcore Status:", response.status_code)
+        print("📨 Netcore Response:", response.text)
 
-    print("📨 Netcore Status:", response.status_code)
-    print("📨 Netcore Response:", response.text)
-
-    if response.status_code == 200:
-        return {"status": "✅ Email sent successfully"}
-    else:
         return {
-            "status": "❌ Failed to send",
+            "status": "✅ Sent" if response.status_code == 200 else "❌ Failed to send",
             "details": response.text
+        }
+
+    except Exception as e:
+        print("❌ Exception in /send_candidate_list_email/:", str(e))
+        return {
+            "status": "❌ Error",
+            "message": str(e)
         }
