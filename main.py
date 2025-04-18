@@ -9,6 +9,7 @@ import os
 
 app = FastAPI()
 
+# CORS setup
 origins = [
     "https://chic-klepon-77ad14.netlify.app"
 ]
@@ -21,10 +22,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Jinja2 setup
+# Jinja2 email template setup
 env = Environment(loader=FileSystemLoader("templates"))
 
-# Candidate model
+# Models
 class Candidate(BaseModel):
     Name: str
     College: str
@@ -36,7 +37,6 @@ class Candidate(BaseModel):
     Portfolio: Optional[str] = ""
     Email: Optional[str] = ""
 
-# Email payload model
 class EmailRequest(BaseModel):
     recipient_email: str
     recipient_name: str
@@ -48,34 +48,31 @@ async def send_email(payload: EmailRequest):
     print("✅ Received payload:")
     print(payload.dict())
 
-    # Hardcoded 'from' details (use valid, working sender identity)
-    from_email = "pst@emails.testbook.com"
-    from_name = "PST Team"
-
-    print("📬 From Email:", from_email)
-    print("📬 From Name:", from_name)
-
-    # Convert list of skills to comma-separated string
+    # Convert skills to comma-separated if needed
     for candidate in payload.candidates:
         if isinstance(candidate.Skills, list):
             candidate.Skills = ", ".join(candidate.Skills)
 
-    # Render HTML content from template
+    # Render email HTML
     template = env.get_template("email_template.html")
     html_content = template.render(
         recipient_name=payload.recipient_name,
         candidates=payload.candidates
     )
 
-    # Netcore setup
-    email_api_url = os.environ.get("EMAIL_API_URL")
-    email_api_key = os.environ.get("EMAIL_API_KEY")
+    # ✅ Hardcoded working values
+    from_email = "pst@emails.testbook.com"
+    from_name = "PST Team"
+    email_api_url = "https://emailapi.netcorecloud.net/v5.1/mail/send"
+    email_api_key = "12f88c25be606f95bf4cfee3d3f58746"
 
-    # Construct Netcore API payload
+    print("📬 From Email:", from_email)
+    print("📬 From Name:", from_name)
+
     netcore_payload = {
         "from": {
-            "email": from_email,
-            "name": from_name
+            "email": str(from_email),
+            "name": str(from_name)
         },
         "personalizations": [
             {
@@ -84,14 +81,16 @@ async def send_email(payload: EmailRequest):
                         "email": payload.recipient_email,
                         "name": payload.recipient_name
                     }
-                ]
+                ],
+                "subject": payload.subject
             }
         ],
-        "subject": payload.subject,
-        "content": {
-            "type": "html",
-            "value": html_content
-        }
+        "content": [
+            {
+                "type": "html",   # ✅ REQUIRED by Netcore
+                "value": html_content
+            }
+        ]
     }
 
     headers = {
@@ -99,7 +98,6 @@ async def send_email(payload: EmailRequest):
         "api_key": email_api_key
     }
 
-    # Send request
     response = requests.post(email_api_url, headers=headers, json=netcore_payload)
 
     print("📨 Netcore Status:", response.status_code)
