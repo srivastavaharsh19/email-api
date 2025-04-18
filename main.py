@@ -9,7 +9,6 @@ import os
 
 app = FastAPI()
 
-# ✅ Netlify frontend origin (no trailing slash)
 origins = [
     "https://chic-klepon-77ad14.netlify.app"
 ]
@@ -22,10 +21,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Jinja2 template setup
+# Jinja2 setup
 env = Environment(loader=FileSystemLoader("templates"))
 
-# ✅ Models
+# Candidate model
 class Candidate(BaseModel):
     Name: str
     College: str
@@ -37,6 +36,7 @@ class Candidate(BaseModel):
     Portfolio: Optional[str] = ""
     Email: Optional[str] = ""
 
+# Email payload model
 class EmailRequest(BaseModel):
     recipient_email: str
     recipient_name: str
@@ -48,52 +48,50 @@ async def send_email(payload: EmailRequest):
     print("✅ Received payload:")
     print(payload.dict())
 
-    # 🛠 Flatten skills list if needed
-    for candidate in payload.candidates:
-        if isinstance(candidate.Skills, list):
-            candidate.Skills = ", ".join(candidate.Skills)
-
-    # ✅ Render HTML content from template
-    template = env.get_template("email_template.html")
-    html_content = template.render(
-        recipient_name=payload.recipient_name,
-        candidates=payload.candidates
-    )
-
-    # ✅ Hardcoded working sender (skip env vars)
+    # Hardcoded 'from' details (use valid, working sender identity)
     from_email = "pst@emails.testbook.com"
     from_name = "PST Team"
 
     print("📬 From Email:", from_email)
     print("📬 From Name:", from_name)
 
-    # ✅ Netcore API config (keep env for API URL + key)
+    # Convert list of skills to comma-separated string
+    for candidate in payload.candidates:
+        if isinstance(candidate.Skills, list):
+            candidate.Skills = ", ".join(candidate.Skills)
+
+    # Render HTML content from template
+    template = env.get_template("email_template.html")
+    html_content = template.render(
+        recipient_name=payload.recipient_name,
+        candidates=payload.candidates
+    )
+
+    # Netcore setup
     email_api_url = os.environ.get("EMAIL_API_URL")
     email_api_key = os.environ.get("EMAIL_API_KEY")
 
-    if not all([email_api_url, email_api_key]):
-        print("❌ Missing API URL or KEY env vars")
-        return {"status": "❌ Error", "message": "Missing Netcore credentials"}
-
-    # ✅ Build Netcore payload
+    # Construct Netcore API payload
     netcore_payload = {
         "from": {
             "email": from_email,
             "name": from_name
         },
-        "subject": payload.subject,
-        "to": [
+        "personalizations": [
             {
-                "email": payload.recipient_email,
-                "name": payload.recipient_name
+                "to": [
+                    {
+                        "email": payload.recipient_email,
+                        "name": payload.recipient_name
+                    }
+                ]
             }
         ],
-        "content": [
-            {
-                "type": "text/html",
-                "value": html_content
-            }
-        ]
+        "subject": payload.subject,
+        "content": {
+            "type": "html",
+            "value": html_content
+        }
     }
 
     headers = {
@@ -101,7 +99,7 @@ async def send_email(payload: EmailRequest):
         "api_key": email_api_key
     }
 
-    # ✅ Send email
+    # Send request
     response = requests.post(email_api_url, headers=headers, json=netcore_payload)
 
     print("📨 Netcore Status:", response.status_code)
