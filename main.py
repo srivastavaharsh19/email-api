@@ -1,7 +1,6 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Optional
-from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from jinja2 import Environment, FileSystemLoader
 import requests
@@ -9,19 +8,19 @@ import os
 
 app = FastAPI()
 
-# Allow CORS from any origin (for Bolt or frontend)
+# Allow CORS for local or frontend app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace with your domain in production
+    allow_origins=["*"],  # Change to specific domain later
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Setup Jinja2 Environment
+# Jinja2 environment
 env = Environment(loader=FileSystemLoader("templates"))
 
-# Candidate model
+# Pydantic models
 class Candidate(BaseModel):
     Name: str
     College: str
@@ -33,7 +32,6 @@ class Candidate(BaseModel):
     Portfolio: Optional[str] = None
     Email: Optional[str] = None
 
-# Request body model
 class EmailRequest(BaseModel):
     recipient_email: str
     recipient_name: str
@@ -42,23 +40,56 @@ class EmailRequest(BaseModel):
 
 @app.post("/send_candidate_list_email/")
 async def send_email(payload: EmailRequest):
-    # Render the email HTML using Jinja2
+    # Render the HTML content
     template = env.get_template("email_template.html")
     html_content = template.render(
         recipient_name=payload.recipient_name,
         candidates=payload.candidates
     )
 
-    # --- Replace this with actual Netcore API call ---
-    netcore_api_url = "https://api.netcore.example/send"  # Change this!
-    response = requests.post(netcore_api_url, json={
-        "to": payload.recipient_email,
-        "subject": payload.subject,
-        "body": html_content,
-        "type": "html"
-    })
+    # Read environment variables
+    email_api_url = os.environ.get("EMAIL_API_URL")
+    email_api_key = os.environ.get("EMAIL_API_KEY")
+    from_email = os.environ.get("FROM_EMAIL")
+    from_name = os.environ.get("FROM_NAME")
 
-    if response.status_code == 200:
+    # Construct Netcore request
+    netcore_payload = {
+        "from": {
+            "email": from_email,
+            "name": from_name
+        },
+        "personalizations": [
+            {
+                "to": [
+                    {
+                        "email": payload.recipient_email,
+                        "name": payload.recipient_name
+                    }
+                ],
+                "subject": payload.subject
+            }
+        ],
+        "content": [
+            {
+                "type": "html",
+                "value": html_content
+            }
+        ]
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "api_key": email_api_key
+    }
+
+    response = requests.post(email_api_url, json=netcore_payload, headers=headers)
+
+    if response.status_code in [200, 202]:
         return {"status": "Email sent"}
     else:
-        return {"status": "Failed to send", "details": response.text}
+        return {
+            "status": "Failed to send email",
+            "response_code": response.status_code,
+            "details": response.text
+        }
