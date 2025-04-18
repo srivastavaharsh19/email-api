@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,9 +39,12 @@ class EmailRequest(BaseModel):
     candidates: List[Candidate]
 
 @app.post("/send_candidate_list_email/")
-async def send_email(payload: EmailRequest):
-    print("✅ Received payload:")
-    print(payload.dict())
+async def send_email(request: Request):
+    body = await request.body()
+    print("📦 RAW BODY RECEIVED:")
+    print(body.decode("utf-8"))
+
+    return {"status": "received"}
 
     # Render the HTML content
     template = env.get_template("email_template.html")
