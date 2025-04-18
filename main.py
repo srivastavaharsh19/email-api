@@ -79,7 +79,7 @@ async def send_email(payload: EmailRequest):
 
     headers = {
         "Content-Type": "application/json",
-        "X-Api-Key": api_key
+        "api_key": api_key
     }
 
     session = requests.Session()
