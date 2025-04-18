@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>{{ subject }}</title>
+  <style>
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 12px;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px;
+      border: 1px solid #ddd;
+    }
+    th {
+      background-color: #f3f3f3;
+    }
+  </style>
+</head>
+<body>
+  <h2>Hello {{ recipient_name }},</h2>
+  <p>Here is the list of shortlisted candidates:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>College</th>
+        <th>Degree</th>
+        <th>Skills</th>
+        <th>Coding Hours</th>
+        <th>Projects</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in candidates %}
+      <tr>
+        <td>{{ c.Name }}</td>
+        <td>{{ c.College }}</td>
+        <td>{{ c.Degree }}</td>
+        <td>{{ c.Skills }}</td>
+        <td>{{ c.Coding_Hours }}</td>
+        <td>{{ c.Projects }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p>Best regards,<br>Polaris Campus Team</p>
+</body>
+</html>
