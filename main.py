@@ -10,7 +10,7 @@ import os
 app = FastAPI()
 
 origins = [
-    "https://chic-klepon-77ad14.netlify.app/", 
+    "https://chic-klepon-77ad14.netlify.app", 
 ]
 
 app.add_middleware(
