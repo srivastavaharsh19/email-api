@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,9 +8,8 @@ import os
 
 app = FastAPI()
 
-origins = [
-    "https://chic-klepon-77ad14.netlify.app",
-]
+# ✅ Netlify frontend origin - NO trailing slash
+origins = ["https://chic-klepon-77ad14.netlify.app"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,9 +19,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Jinja2 setup
+# Jinja2 for templating
 env = Environment(loader=FileSystemLoader("templates"))
 
+# Models
 class Candidate(BaseModel):
     Name: str
     College: str
@@ -45,30 +45,34 @@ async def send_email(payload: EmailRequest):
     print("✅ Received payload:")
     print(payload.dict())
 
-    # 🧼 Convert Skills to string if needed
+    # Convert skills list to string
     for candidate in payload.candidates:
         if isinstance(candidate.Skills, list):
             candidate.Skills = ", ".join(candidate.Skills)
 
-    # 🧱 Render HTML content
+    # Render HTML
     template = env.get_template("email_template.html")
     html_content = template.render(
         recipient_name=payload.recipient_name,
         candidates=payload.candidates
     )
 
-    # 🔐 Read env vars
+    # Load env vars
     email_api_url = os.environ.get("EMAIL_API_URL")
     email_api_key = os.environ.get("EMAIL_API_KEY")
     from_email = os.environ.get("FROM_EMAIL")
     from_name = os.environ.get("FROM_NAME")
 
-    # 🧪 Debug check
+    # Validate all
     if not all([email_api_url, email_api_key, from_email, from_name]):
         print("❌ Missing one or more environment variables!")
         return {"status": "❌ Error", "message": "Missing one or more environment variables!"}
 
-    # 📨 Prepare payload as per Netcore docs
+    # ✅ Debug the vars too
+    print("📬 From Email:", from_email)
+    print("📬 From Name:", from_name)
+
+    # Netcore-compliant payload
     netcore_payload = {
         "personalizations": [
             {
@@ -82,12 +86,12 @@ async def send_email(payload: EmailRequest):
             }
         ],
         "from": {
-            "email": from_email,
-            "name": from_name
-        },
+            "email": str(from_email).strip(),  # ✅ Remove any hidden spaces/newlines
+            "name": str(from_name).strip()
+            },
         "content": [
             {
-                "type": "text/html",
+                "type": "html",  # ✅ Netcore wants "html" not "text/html"
                 "value": html_content
             }
         ]
@@ -98,8 +102,9 @@ async def send_email(payload: EmailRequest):
         "api_key": email_api_key
     }
 
-    # 📤 Send email
+    # Send
     response = requests.post(email_api_url, headers=headers, json=netcore_payload)
+
     print("📨 Netcore Status:", response.status_code)
     print("📨 Netcore Response:", response.text)
 
