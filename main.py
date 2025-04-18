@@ -10,7 +10,7 @@ import os
 app = FastAPI()
 
 origins = [
-    "https://chic-klepon-77ad14.netlify.app/",
+    "https://chic-klepon-77ad14.netlify.app/", 
 ]
 
 app.add_middleware(
@@ -29,7 +29,7 @@ class Candidate(BaseModel):
     Name: str
     College: str
     Degree: str
-    Skills: str | List[str]  # Support both string and array
+    Skills: str | List[str]  # Accept string or list
     Coding_Hours: str
     Projects: str
     LinkedIn: Optional[str] = None
@@ -48,25 +48,25 @@ async def send_email(payload: EmailRequest):
     print("✅ Received payload:")
     print(payload.dict())
 
-    # Fix: Convert skills list to comma-separated string if needed
+    # 🔧 Convert Skills to comma-separated string if it’s a list
     for candidate in payload.candidates:
         if isinstance(candidate.Skills, list):
             candidate.Skills = ", ".join(candidate.Skills)
 
-    # Load and render email template
+    # 🧠 Render HTML email
     template = env.get_template("email_template.html")
     html_content = template.render(
         recipient_name=payload.recipient_name,
         candidates=payload.candidates
     )
 
-    # Load env variables
+    # 🔐 Read .env config
     email_api_url = os.environ.get("EMAIL_API_URL")
     email_api_key = os.environ.get("EMAIL_API_KEY")
     from_email = os.environ.get("FROM_EMAIL")
     from_name = os.environ.get("FROM_NAME")
 
-    # Construct Netcore payload
+    # 📬 Build payload for Netcore
     netcore_payload = {
         "from": {
             "email": from_email,
@@ -84,10 +84,10 @@ async def send_email(payload: EmailRequest):
 
     headers = {
         "Content-Type": "application/json",
-        "api_key": email_api_key
+        "api-key": email_api_key  # ✅ Fix: was 'api_key'
     }
 
-    # Send to Netcore
+    # 🚀 Fire the request
     response = requests.post(email_api_url, headers=headers, json=netcore_payload)
 
     print("📨 Netcore API Status:", response.status_code)
