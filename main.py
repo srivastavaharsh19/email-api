@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from typing import List, Optional
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from jinja2 import Environment, FileSystemLoader
 import requests
@@ -8,8 +9,10 @@ import os
 
 app = FastAPI()
 
-# ✅ Netlify frontend origin - NO trailing slash
-origins = ["https://chic-klepon-77ad14.netlify.app"]
+# ✅ Netlify frontend origin (no trailing slash)
+origins = [
+    "https://chic-klepon-77ad14.netlify.app"
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,10 +22,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Jinja2 for templating
+# ✅ Jinja2 template setup
 env = Environment(loader=FileSystemLoader("templates"))
 
-# Models
+# ✅ Models
 class Candidate(BaseModel):
     Name: str
     College: str
@@ -45,53 +48,49 @@ async def send_email(payload: EmailRequest):
     print("✅ Received payload:")
     print(payload.dict())
 
-    # Convert skills list to string
+    # 🛠 Flatten skills list if needed
     for candidate in payload.candidates:
         if isinstance(candidate.Skills, list):
             candidate.Skills = ", ".join(candidate.Skills)
 
-    # Render HTML
+    # ✅ Render HTML content from template
     template = env.get_template("email_template.html")
     html_content = template.render(
         recipient_name=payload.recipient_name,
         candidates=payload.candidates
     )
 
-    # Load env vars
-    email_api_url = os.environ.get("EMAIL_API_URL")
-    email_api_key = os.environ.get("EMAIL_API_KEY")
-    from_email = os.environ.get("FROM_EMAIL")
-    from_name = os.environ.get("FROM_NAME")
+    # ✅ Hardcoded working sender (skip env vars)
+    from_email = "pst@emails.testbook.com"
+    from_name = "PST Team"
 
-    # Validate all
-    if not all([email_api_url, email_api_key, from_email, from_name]):
-        print("❌ Missing one or more environment variables!")
-        return {"status": "❌ Error", "message": "Missing one or more environment variables!"}
-
-    # ✅ Debug the vars too
     print("📬 From Email:", from_email)
     print("📬 From Name:", from_name)
 
-    # Netcore-compliant payload
+    # ✅ Netcore API config (keep env for API URL + key)
+    email_api_url = os.environ.get("EMAIL_API_URL")
+    email_api_key = os.environ.get("EMAIL_API_KEY")
+
+    if not all([email_api_url, email_api_key]):
+        print("❌ Missing API URL or KEY env vars")
+        return {"status": "❌ Error", "message": "Missing Netcore credentials"}
+
+    # ✅ Build Netcore payload
     netcore_payload = {
-        "personalizations": [
+        "from": {
+            "email": from_email,
+            "name": from_name
+        },
+        "subject": payload.subject,
+        "to": [
             {
-                "to": [
-                    {
-                        "email": payload.recipient_email,
-                        "name": payload.recipient_name
-                    }
-                ],
-                "subject": payload.subject
+                "email": payload.recipient_email,
+                "name": payload.recipient_name
             }
         ],
-        "from": {
-            "email": str(from_email).strip(),  # ✅ Remove any hidden spaces/newlines
-            "name": str(from_name).strip()
-            },
         "content": [
             {
-                "type": "html",  # ✅ Netcore wants "html" not "text/html"
+                "type": "text/html",
                 "value": html_content
             }
         ]
@@ -102,7 +101,7 @@ async def send_email(payload: EmailRequest):
         "api_key": email_api_key
     }
 
-    # Send
+    # ✅ Send email
     response = requests.post(email_api_url, headers=headers, json=netcore_payload)
 
     print("📨 Netcore Status:", response.status_code)
@@ -111,4 +110,7 @@ async def send_email(payload: EmailRequest):
     if response.status_code == 200:
         return {"status": "✅ Email sent"}
     else:
-        return {"status": "❌ Failed to send", "details": response.text}
+        return {
+            "status": "❌ Failed to send",
+            "details": response.text
+        }
